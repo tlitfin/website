@@ -19,6 +19,8 @@ subitems:
         url: /community_resources
       - title: How-to Guides
         url: /guides
+      - title: Workflows
+        url: /workflows
       - title: Software
         url: /software
   - title: External resources
