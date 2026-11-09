@@ -7,6 +7,17 @@ topnav_title: Australian Structural Biology Computing
 description: "A website for the Australian Structural Biology Computing community."
 # Metadata description of the website
 
+# Optional WorkflowHub integration. Remove this block or set enabled to false
+# to disable automated workflow data updates.
+workflowhub:
+  enabled: true
+  base_url: https://dev.workflowhub.eu
+  collection_type: collection
+  collection_id: 10
+  output: _data/data_workflows.yaml
+  minimum_record_ratio: 0.8
+  galaxy_launch_url_template: "https://usegalaxy.org.au/workflows/trs_import?trs_server=workflowhub.eu&trs_id={workflow_id}"
+
 # Following AusBioCommons minimal gh-pages with remote deploy -  https://github.com/AustralianBioCommons/how-to-guides/blob/main/_config.yml
 remote_theme: ELIXIR-Belgium/elixir-toolkit-theme
 
