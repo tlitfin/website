@@ -11,9 +11,9 @@ description: "A website for the Australian Structural Biology Computing communit
 # to disable automated workflow data updates.
 workflowhub:
   enabled: true
-  base_url: https://dev.workflowhub.eu
+  base_url: https://workflowhub.eu
   collection_type: collection
-  collection_id: 10
+  collection_id: 40
   output: _data/data_workflows.yaml
   minimum_record_ratio: 0.8
   galaxy_launch_url_template: "https://usegalaxy.org.au/workflows/trs_import?trs_server=workflowhub.eu&trs_id={workflow_id}"
