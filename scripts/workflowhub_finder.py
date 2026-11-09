@@ -269,6 +269,11 @@ def build_parser():
         "--galaxy-launch-url-template",
         help="Optional URL template containing {workflow_id}",
     )
+    parser.add_argument(
+        "--print-output",
+        action="store_true",
+        help="Print the configured output path without generating data",
+    )
     return parser
 
 
@@ -276,6 +281,10 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
     settings = resolve_settings(args, parser)
+    if args.print_output:
+        if settings is not None:
+            print(settings["output"])
+        return
     if settings is None:
         print("WorkflowHub integration is disabled; nothing to generate")
         return
