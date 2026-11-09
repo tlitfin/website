@@ -10,7 +10,8 @@ from scripts.workflowhub_finder import (
     build_parser,
     load_site_config,
     resolve_settings,
-    write_workflows,
+    update_workflow_file,
+    validate_workflows,
 )
 
 
@@ -104,10 +105,39 @@ class WorkflowHubFinderTests(unittest.TestCase):
     def test_requested_output_path_is_created(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "nested" / "workflows.yaml"
-            write_workflows([{"title": "Example"}], output)
+            workflows = [
+                {"title": "Example", "url": "/workflows/1", "class": "nextflow"}
+            ]
+            changed = update_workflow_file(workflows, output, 0.8)
             data = yaml.safe_load(output.read_text(encoding="utf-8"))
 
-        self.assertEqual(data, [{"title": "Example"}])
+        self.assertTrue(changed)
+        self.assertEqual(data, workflows)
+
+    def test_duplicate_urls_are_rejected_before_writing(self):
+        workflows = [
+            {"title": "One", "url": "/workflows/1"},
+            {"title": "Two", "url": "/workflows/1"},
+        ]
+
+        with self.assertRaisesRegex(ValueError, "Duplicate workflow URL"):
+            validate_workflows(workflows)
+
+    def test_large_record_count_drop_preserves_existing_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "workflows.yaml"
+            baseline = [
+                {"title": "One", "url": "/workflows/1"},
+                {"title": "Two", "url": "/workflows/2"},
+            ]
+            output.write_text(yaml.safe_dump(baseline), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "expected at least 2"):
+                update_workflow_file(
+                    [{"title": "One", "url": "/workflows/1"}], output, 0.8
+                )
+
+            self.assertEqual(yaml.safe_load(output.read_text()), baseline)
 
 
 if __name__ == "__main__":

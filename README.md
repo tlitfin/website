@@ -25,10 +25,13 @@ workflowhub:
   galaxy_launch_url_template: "https://example.org/import?id={workflow_id}"
 ```
 
-If the block is absent or `enabled` is `false`, the Action completes without
-generating data, building the site, or opening a pull request. Command-line
-arguments can be used instead of `_config.yml` when running the generator
-outside a Jekyll site.
+If the block is absent or `enabled` is `false`, data generation is skipped and
+no update pull request is opened. Command-line arguments can be used instead of
+`_config.yml` when running the generator outside a Jekyll site.
+
+The generator fetches, validates, and compares the data before atomically
+replacing the configured output file. Its unit tests run separately when the
+integration code changes, rather than during each data refresh.
 
 Before the first run on a fork, open **Settings → Actions → General → Workflow
 permissions** and allow GitHub Actions to create pull requests.

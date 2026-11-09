@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 import argparse
+import math
+import os
+import tempfile
 from pathlib import Path
 
 import requests
 import yaml
+
+
+REQUIRED_FIELDS = ("title", "url")
 
 
 class WorkflowHubClient:
@@ -107,17 +113,81 @@ class WorkflowHubClient:
         )
 
 
-def write_workflows(workflows, output):
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(
-        yaml.safe_dump(
-            workflows,
-            default_flow_style=False,
-            sort_keys=True,
-            allow_unicode=True,
-        ),
-        encoding="utf-8",
+def load_workflows(path):
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as error:
+        raise ValueError(f"Could not read valid YAML from {path}: {error}") from error
+    if not isinstance(data, list):
+        raise ValueError(f"{path} must contain a top-level list")
+    return data
+
+
+def validate_workflows(workflows):
+    if not workflows:
+        raise ValueError("Workflow data must not be empty")
+
+    urls = set()
+    for index, workflow in enumerate(workflows, start=1):
+        if not isinstance(workflow, dict):
+            raise ValueError(f"Workflow {index} must be a mapping")
+        missing = [field for field in REQUIRED_FIELDS if not workflow.get(field)]
+        if missing:
+            raise ValueError(
+                f"Workflow {index} is missing required values: {', '.join(missing)}"
+            )
+        if workflow["url"] in urls:
+            raise ValueError(f"Duplicate workflow URL: {workflow['url']}")
+        urls.add(workflow["url"])
+
+
+def validate_record_count(workflows, baseline, minimum_ratio):
+    if not baseline:
+        return
+    minimum_count = math.ceil(len(baseline) * minimum_ratio)
+    if len(workflows) < minimum_count:
+        raise ValueError(
+            f"Generated {len(workflows)} workflows; expected at least "
+            f"{minimum_count} based on the current {len(baseline)} records"
+        )
+
+
+def serialise_workflows(workflows):
+    return yaml.safe_dump(
+        workflows,
+        default_flow_style=False,
+        sort_keys=True,
+        allow_unicode=True,
     )
+
+
+def update_workflow_file(workflows, output, minimum_ratio):
+    baseline = load_workflows(output) if output.exists() else None
+    validate_workflows(workflows)
+    validate_record_count(workflows, baseline, minimum_ratio)
+    rendered = serialise_workflows(workflows)
+
+    if output.exists() and output.read_text(encoding="utf-8") == rendered:
+        return False
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=output.parent,
+            prefix=f".{output.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary_file:
+            temporary_file.write(rendered)
+            temporary_path = Path(temporary_file.name)
+        os.replace(temporary_path, output)
+    finally:
+        if temporary_path and temporary_path.exists():
+            temporary_path.unlink()
+    return True
 
 
 def load_site_config(path):
@@ -149,6 +219,7 @@ def resolve_settings(args, parser):
         "collection_id": args.collection_id,
         "output": args.output,
         "request_timeout": args.request_timeout,
+        "minimum_record_ratio": args.minimum_record_ratio,
         "galaxy_launch_url_template": args.galaxy_launch_url_template,
     }
     settings.update({key: value for key, value in overrides.items() if value is not None})
@@ -163,8 +234,12 @@ def resolve_settings(args, parser):
         parser.error("collection_type must be 'space' or 'collection'")
 
     settings.setdefault("request_timeout", 30.0)
+    settings.setdefault("minimum_record_ratio", 0.8)
     settings.setdefault("galaxy_launch_url_template", "")
+    if not 0 <= float(settings["minimum_record_ratio"]) <= 1:
+        parser.error("minimum_record_ratio must be between 0 and 1")
     settings["collection_id"] = int(settings["collection_id"])
+    settings["minimum_record_ratio"] = float(settings["minimum_record_ratio"])
     settings["output"] = Path(settings["output"])
     return settings
 
@@ -189,6 +264,7 @@ def build_parser():
         type=Path,
     )
     parser.add_argument("--request-timeout", type=float)
+    parser.add_argument("--minimum-record-ratio", type=float)
     parser.add_argument(
         "--galaxy-launch-url-template",
         help="Optional URL template containing {workflow_id}",
@@ -212,9 +288,17 @@ def main():
         galaxy_launch_url_template=settings["galaxy_launch_url_template"],
     )
     workflows = client.workflows()
-    write_workflows(workflows, settings["output"])
-    print(f"Wrote {len(workflows)} workflows to {settings['output']}")
+    changed = update_workflow_file(
+        workflows,
+        settings["output"],
+        settings["minimum_record_ratio"],
+    )
+    status = "Updated" if changed else "No changes to"
+    print(f"{status} {settings['output']} ({len(workflows)} workflows)")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (ValueError, requests.RequestException) as error:
+        raise SystemExit(f"WorkflowHub update failed: {error}") from error
