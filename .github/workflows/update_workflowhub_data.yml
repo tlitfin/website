@@ -83,7 +83,15 @@ jobs:
           git commit -m "Update WorkflowHub workflow data"
           git push --force-with-lease origin "$UPDATE_BRANCH"
 
-          if pr_url="$(gh pr view "$UPDATE_BRANCH" --repo "$GITHUB_REPOSITORY" --json url --jq .url 2>/dev/null)"; then
+          pr_url="$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --head "$UPDATE_BRANCH" \
+            --base "$GITHUB_REF_NAME" \
+            --state open \
+            --json url \
+            --jq '.[0].url // empty')"
+
+          if [ -n "$pr_url" ]; then
             echo "Updated existing pull request: $pr_url"
           else
             gh pr create \
